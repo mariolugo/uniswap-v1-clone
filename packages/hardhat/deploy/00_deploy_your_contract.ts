@@ -1,5 +1,11 @@
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 import { DeployFunction } from "hardhat-deploy/types";
+import { verify } from "../utils/verify";
+import { run } from "hardhat";
+
+async function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 /**
  * Deploys a contract named "YourContract" using the deployer account and
@@ -21,14 +27,38 @@ const deployYourContract: DeployFunction = async function (hre: HardhatRuntimeEn
   const { deployer } = await hre.getNamedAccounts();
   const { deploy } = hre.deployments;
 
-  await deploy("YourContract", {
+  const tokenContract = await deploy("Token", {
     from: deployer,
     // Contract constructor arguments
-    args: [deployer],
+
     log: true,
     // autoMine: can be passed to the deploy function to make the deployment process faster on local networks by
     // automatically mining the contract deployment transaction. There is no effect on live networks.
     autoMine: true,
+  });
+
+  const exchangeContract = await deploy("Exchange", {
+    from: deployer,
+    // Contract constructor arguments
+    args: [tokenContract.address],
+    log: true,
+    // autoMine: can be passed to the deploy function to make the deployment process faster on local networks by
+    // automatically mining the contract deployment transaction. There is no effect on live networks.
+    autoMine: true,
+  });
+
+  // Wait for 30 seconds to let Etherscan catch up on contract deployments
+  // await sleep(30 * 1000);
+
+  await run("verify:verify", {
+    address: tokenContract.address,
+    constructorArguments: [],
+    contract: "contracts/Token.sol:Token",
+  });
+
+  await hre.run("verify:verify", {
+    address: exchangeContract.address,
+    constructorArguments: [tokenContract.address],
   });
 
   // Get the deployed contract
@@ -39,4 +69,4 @@ export default deployYourContract;
 
 // Tags are useful if you have multiple deploy files and only want to run one of them.
 // e.g. yarn deploy --tags YourContract
-deployYourContract.tags = ["YourContract"];
+deployYourContract.tags = ["Token", "Exchange"];
